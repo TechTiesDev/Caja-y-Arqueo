@@ -1,0 +1,623 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Caja y Arqueo — Almacén / Minimercado</title>
+  <link rel="manifest" href="manifest.json" />
+  <meta name="theme-color" content="#a86b43" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+
+<body>
+  <!-- PANTALLA DE INICIO DE SESIÓN Y REGISTRO DE EMPRESA -->
+  <div id="login-screen" class="login-overlay">
+    <div class="login-card">
+      <h1>Caja y Arqueo</h1>
+      <p class="muted-note" id="login-subtitle">Seleccione un perfil rápido o ingrese su usuario/email y PIN</p>
+
+      <!-- FORMULARIO DE LOGIN -->
+      <form id="form-login" class="form-stack mt-16">
+        <label for="login-quick-select">Acceso Rápido Demo</label>
+        <select id="login-quick-select" class="input-xl">
+          <option value="lucas|1111">Lucas — Cajero (Almacén Central)</option>
+          <option value="martina|2222">Martina — Cajera (Almacén Central)</option>
+          <option value="supervisor|5555">Carla — Supervisor (Almacén Central)</option>
+          <option value="dueno|9999">Roberto — Dueño (Almacén Central)</option>
+          <option value="soporte@cajayarqueo.com|9999">🔧 Soporte Global Plataforma (PIN 9999)</option>
+        </select>
+
+        <label for="login-username">Usuario o Email</label>
+        <input type="text" id="login-username" class="input-xl" value="lucas" required />
+
+        <label for="login-pin">PIN / Contraseña</label>
+        <input type="password" id="login-pin" class="input-xl" value="1111" placeholder="••••" required />
+
+        <button type="submit" class="btn-primary-xl mt-16">Iniciar Sesión</button>
+        <button type="button" id="btn-show-register-empresa" class="btn-secondary">
+          🏢 Registrar Nueva Empresa
+        </button>
+      </form>
+
+      <!-- FORMULARIO DE ALTA DE EMPRESA Y PRIMER DUEÑO (4.1) -->
+      <form id="form-register-empresa" class="form-stack mt-16 hidden">
+        <h2>Alta de Nueva Empresa</h2>
+        <input type="text" id="reg-emp-nombre" class="input-xl" placeholder="Nombre Comercial / Minimercado *"
+          required />
+        <input type="text" id="reg-emp-tel" class="input-xl" placeholder="Teléfono del Comercio" />
+        <input type="text" id="reg-dueno-nombre" class="input-xl" placeholder="Nombre del Dueño *" required />
+        <input type="email" id="reg-dueno-email" class="input-xl" placeholder="Email del Dueño (Login) *" required />
+        <input type="password" id="reg-dueno-pass" class="input-xl" placeholder="PIN o Contraseña *" required />
+        <small class="muted-note">* Campo obligatorio</small>
+        <button type="submit" class="btn-primary-xl">Crear Empresa e Ingresar</button>
+        <button type="button" id="btn-back-to-login" class="btn-secondary">⬅ Volver a Iniciar Sesión</button>
+      </form>
+    </div>
+  </div>
+
+  <!-- BARRA SUPERIOR -->
+  <header class="topbar hidden" id="app-topbar">
+    <div class="brand">
+      <button type="button" id="btn-toggle-sidebar" class="btn-sidebar-toggle"
+        title="Desplegar / ocultar barra lateral">
+        ☰ Menú
+      </button>
+      <h1>Caja y Arqueo</h1>
+    </div>
+
+    <nav class="nav-tabs" id="main-nav">
+      <button class="nav-tab" data-view="pos">Cobro</button>
+      <button class="nav-tab" data-view="movimientos">Entrada / Salida</button>
+      <button class="nav-tab active" data-view="caja">Caja</button>
+    </nav>
+  </header>
+
+  <!-- BARRA LATERAL DESPLEGABLE (DINÁMICA SEGÚN ESTADO SOPORTE O EMPRESA ACTIVA) -->
+  <div id="sidebar-backdrop" class="sidebar-backdrop hidden"></div>
+  <aside id="app-sidebar" class="sidebar hidden">
+    <div class="sidebar-header">
+      <h2 id="sidebar-header-title">Accesos</h2>
+      <button type="button" id="btn-close-sidebar" class="btn-outline-sm">✕</button>
+    </div>
+
+    <!-- Indicador de Empresa Activa (🏢 nombre_empresa) -->
+    <div id="sidebar-company-badge" class="company-badge hidden"></div>
+
+    <!-- Menú Operativo de Empresa (Dueño / Supervisor / Soporte dentro de empresa) -->
+    <div class="sidebar-nav" id="sidebar-company-nav">
+      <button class="nav-tab sidebar-btn" data-view="supervisor" id="tab-supervisor">Supervisor</button>
+      <button class="nav-tab sidebar-btn" data-view="dashboard" id="tab-dashboard">Métricas</button>
+      <button class="nav-tab sidebar-btn" data-view="catalogo" id="tab-catalogo">Catálogo</button>
+      <button class="nav-tab sidebar-btn" data-view="personal" id="tab-personal">Personal</button>
+      <button class="nav-tab sidebar-btn" data-view="auditoria" id="tab-auditoria">Auditoría</button>
+    </div>
+
+    <!-- Menú Exclusivo de Soporte Fuera de Empresa (5.1) -->
+    <div class="sidebar-nav hidden" id="sidebar-soporte-nav">
+      <button class="nav-tab sidebar-btn active" data-soporte-tab="empresas">🏢 Empresas</button>
+      <button class="nav-tab sidebar-btn" data-soporte-tab="password">🔑 Cambio de Contraseña</button>
+      <button class="nav-tab sidebar-btn" data-soporte-tab="usuarios">👥 Usuarios Soporte</button>
+    </div>
+
+    <div class="sidebar-footer">
+      <button id="btn-salir-empresa-soporte" class="btn-secondary sidebar-btn hidden">
+        ← Salir de la empresa
+      </button>
+      <button id="btn-logout" class="btn-logout-sidebar">Salir</button>
+    </div>
+  </aside>
+
+  <main class="main-container hidden" id="app-main">
+    <!-- ====================================================================
+         VISTA CONSOLA GLOBAL DE SOPORTE (ESTADO 1: SOPORTE FUERA DE EMPRESA)
+         ==================================================================== -->
+    <section id="view-soporte" class="view-section">
+      <!-- Sub-vista 1: Listado de Empresas y Modo Mantenimiento -->
+      <div id="soporte-pane-empresas" class="soporte-pane">
+        <div class="card">
+          <div class="dashboard-toolbar">
+            <h2>Empresas Registradas</h2>
+            <input type="search" id="input-buscar-empresas" class="input-xl" style="max-width:340px;"
+              placeholder="Buscar empresa por nombre..." />
+          </div>
+          <div id="grid-empresas-soporte" class="two-col-grid mt-16"></div>
+        </div>
+      </div>
+
+      <!-- Sub-vista 2: Cambio de Contraseña -->
+      <div id="soporte-pane-password" class="soporte-pane hidden">
+        <div class="card" style="max-width:520px;margin:0 auto;">
+          <h2>Cambio de Contraseña</h2>
+          <form id="form-soporte-password" class="form-stack mt-16">
+            <label>Contraseña / PIN Actual</label>
+            <input type="password" id="sop-pass-actual" class="input-xl" required />
+            <label>Nueva Contraseña / PIN</label>
+            <input type="password" id="sop-pass-nueva" class="input-xl" required />
+            <label>Confirmar Nueva Contraseña / PIN</label>
+            <input type="password" id="sop-pass-confirm" class="input-xl" required />
+            <button type="button" id="btn-toggle-pass-vis" class="btn-outline-sm">
+              👁 Mostrar / Ocultar texto
+            </button>
+            <button type="submit" class="btn-primary-xl">Actualizar Contraseña</button>
+          </form>
+        </div>
+      </div>
+
+      <!-- Sub-vista 3: CRUD de Usuarios Soporte -->
+      <div id="soporte-pane-usuarios" class="soporte-pane hidden">
+        <div class="two-col-grid">
+          <div class="card">
+            <h2>Usuarios Soporte</h2>
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>Nombre</th>
+                  <th>Email / Usuario</th>
+                  <th>Estado</th>
+                  <th>Acción</th>
+                </tr>
+              </thead>
+              <tbody id="tbody-usuarios-soporte"></tbody>
+            </table>
+          </div>
+
+          <div class="card">
+            <h2>Nuevo Usuario Soporte</h2>
+            <form id="form-nuevo-soporte-user" class="form-stack mt-16">
+              <label>Nombre Completo</label>
+              <input type="text" id="sop-usr-nombre" class="input-xl" required />
+              <label>Email de Acceso</label>
+              <input type="email" id="sop-usr-email" class="input-xl" required />
+              <label>Teléfono</label>
+              <input type="text" id="sop-usr-tel" class="input-xl" />
+              <label>Contraseña / PIN</label>
+              <input type="password" id="sop-usr-pass" class="input-xl" required />
+              <button type="submit" class="btn-primary-xl">➕ Crear Usuario Soporte</button>
+            </form>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ====================================================================
+         VISTA: CAJA / TURNOS (INICIAR TURNO ↔ CERRAR TURNO + ARQUEO DIFERIDO)
+         ==================================================================== -->
+    <section id="view-caja" class="view-section active">
+      <div class="card" id="card-control-turno">
+        <h2 id="titulo-control-turno">Iniciar turno</h2>
+        <div id="wrap-fondo-inicial" class="form-stack">
+          <label for="input-fondo-inicial">Efectivo Inicial ($)</label>
+          <input type="number" id="input-fondo-inicial" class="input-xl" value="15000" min="0" step="any" required />
+        </div>
+        <button type="button" id="btn-accion-turno" class="btn-primary-xl mt-16">Iniciar turno</button>
+      </div>
+
+      <div class="card mt-16 hidden" id="card-cierre-caja">
+        <h2>Cierre de Caja</h2>
+        <p class="muted-note" id="nota-turno-arqueo">
+          Ingrese los montos contados del turno finalizado. Mientras completa este arqueo, ya puede iniciar un turno
+          nuevo arriba.
+        </p>
+        <form id="form-arqueo-ciego" class="arqueo-grid">
+          <div>
+            <label>Efectivo en Cajón ($)</label>
+            <input type="number" id="arq-efectivo" value="" placeholder="$ 0" min="0" step="any" />
+          </div>
+          <div>
+            <label>Tarjeta Débito ($)</label>
+            <input type="number" id="arq-debito" value="" placeholder="$ 0" min="0" step="any" />
+          </div>
+          <div>
+            <label>Tarjeta Crédito ($)</label>
+            <input type="number" id="arq-credito" value="" placeholder="$ 0" min="0" step="any" />
+          </div>
+          <div>
+            <label>Transferencia / QR ($)</label>
+            <input type="number" id="arq-qr" value="" placeholder="$ 0" min="0" step="any" />
+          </div>
+          <div>
+            <label>Cuenta Corriente ($)</label>
+            <input type="number" id="arq-fiado" value="" placeholder="$ 0" min="0" step="any" />
+          </div>
+          <div class="full-span">
+            <button type="submit" class="btn-danger-xl">Confirmar Cierre de Caja</button>
+          </div>
+        </form>
+      </div>
+
+      <div id="resultado-arqueo-box" class="aux-panel hidden"></div>
+    </section>
+
+    <!-- ====================================================================
+         VISTA: COBRO
+         ==================================================================== -->
+    <section id="view-pos" class="view-section">
+      <div class="wizard-header">
+        <div class="wizard-actions">
+          <button id="btn-wizard-back" class="btn-back" disabled>⬅ Atrás</button>
+          <button id="btn-wizard-reset" class="btn-secondary">Reiniciar</button>
+        </div>
+      </div>
+
+      <div class="wizard-step active" id="wizard-step-1">
+        <div id="grid-empleados" class="touch-grid"></div>
+      </div>
+
+      <div class="wizard-step" id="wizard-step-2">
+        <div class="numpad-layout">
+          <div class="numpad-inputs">
+            <div class="input-card active-input" id="card-input-cantidad">
+              <span class="input-label">Unidades</span>
+              <div class="input-display" id="display-cantidad"><span class="placeholder-zero">0</span></div>
+            </div>
+            <button id="btn-step2-next" class="btn-primary-xl">Siguiente ➡</button>
+          </div>
+
+          <div class="numpad-grid" id="pos-numpad">
+            <button class="num-key" data-key="7">7</button>
+            <button class="num-key" data-key="8">8</button>
+            <button class="num-key" data-key="9">9</button>
+            <button class="num-key" data-key="4">4</button>
+            <button class="num-key" data-key="5">5</button>
+            <button class="num-key" data-key="6">6</button>
+            <button class="num-key" data-key="1">1</button>
+            <button class="num-key" data-key="2">2</button>
+            <button class="num-key" data-key="3">3</button>
+            <button class="num-key key-clear" data-key="C">C</button>
+            <button class="num-key" data-key="0">0</button>
+            <button class="num-key" data-key="00">00</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="wizard-step" id="wizard-step-3">
+        <div id="grid-rubros" class="touch-grid"></div>
+        <button id="btn-step3-next" class="btn-primary-xl mt-16">Siguiente ➡</button>
+      </div>
+
+      <div class="wizard-step" id="wizard-step-4">
+        <div class="step-title-row">
+          <span></span>
+          <div class="step4-live-total">Total: <strong id="step4-total-label">$0</strong></div>
+        </div>
+
+        <div id="grid-medios-pago" class="payment-containers-grid"></div>
+
+        <div id="panel-cuenta-corriente" class="aux-panel hidden">
+          <div id="grid-clientes-fiado" class="touch-grid"></div>
+        </div>
+
+        <button id="btn-step4-next" class="btn-primary-xl mt-16">Siguiente ➡</button>
+      </div>
+
+      <div class="wizard-step" id="wizard-step-5">
+        <div class="summary-card" id="summary-editable-card"></div>
+        <button id="btn-confirmar-venta-final" class="btn-confirm-giant">
+          ✔ Confirmar Venta
+        </button>
+      </div>
+    </section>
+
+    <!-- ====================================================================
+         VISTA: ENTRADA / SALIDA DE EFECTIVO
+         ==================================================================== -->
+    <section id="view-movimientos" class="view-section">
+      <div class="wizard-header">
+        <div class="wizard-actions">
+          <button id="btn-mov-back" class="btn-back" disabled>⬅ Atrás</button>
+          <button id="btn-mov-reset" class="btn-secondary">Reiniciar</button>
+        </div>
+      </div>
+
+      <div class="wizard-step active" id="mov-step-1">
+        <div id="grid-mov-empleados" class="touch-grid"></div>
+      </div>
+
+      <div class="wizard-step" id="mov-step-2">
+        <div class="touch-grid" id="grid-mov-tipo">
+          <button type="button" class="touch-btn" data-tipo="SALIDA" id="btn-tipo-salida">⬇ Salida de Efectivo</button>
+          <button type="button" class="touch-btn" data-tipo="ENTRADA" id="btn-tipo-entrada">⬆ Entrada de
+            Efectivo</button>
+        </div>
+      </div>
+
+      <div class="wizard-step" id="mov-step-3">
+        <div class="touch-grid" id="grid-mov-destinatarios"></div>
+
+        <div class="mt-16" id="wrap-mov-custom-dest">
+          <input type="text" id="input-mov-custom-dest" class="input-xl"
+            placeholder="O escriba el nombre del proveedor / persona..." />
+          <button type="button" id="btn-mov-step3-next" class="btn-primary-xl mt-16">Siguiente ➡</button>
+        </div>
+      </div>
+
+      <div class="wizard-step" id="mov-step-4">
+        <div class="summary-card" id="mov-summary-preview"></div>
+        <div class="mt-16">
+          <label for="input-mov-monto">Monto en Efectivo ($)</label>
+          <input type="number" id="input-mov-monto" class="input-xl" placeholder="$ 0" min="1" step="any" />
+        </div>
+        <button type="button" id="btn-confirmar-movimiento" class="btn-confirm-giant">
+          ✔ Confirmar Movimiento
+        </button>
+      </div>
+    </section>
+
+    <!-- ====================================================================
+         VISTA: SUPERVISOR
+         ==================================================================== -->
+    <section id="view-supervisor" class="view-section">
+      <div class="card">
+        <h2>Panel de Supervisor</h2>
+        <div class="kpi-row mt-16">
+          <div class="kpi-card highlight">
+            <span class="kpi-title">Efectivo Esperado en Cajón (Turno Activo)</span>
+            <strong class="kpi-value" id="sup-efectivo-cajon">$0</strong>
+          </div>
+        </div>
+        <div class="mt-16">
+          <button id="btn-sup-abrir-cajon" class="btn-secondary">
+            🔓 Abrir Cajón sin Venta
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ====================================================================
+         VISTA: MÉTRICAS DEL DUEÑO
+         ==================================================================== -->
+    <section id="view-dashboard" class="view-section">
+      <div class="dashboard-toolbar">
+        <div>
+          <h2>Métricas</h2>
+        </div>
+
+        <div class="filters-bar">
+          <select id="filtro-empleado">
+            <option value="">Todos los Empleados</option>
+          </select>
+          <select id="filtro-rubro">
+            <option value="">Todos los Rubros</option>
+          </select>
+          <button id="btn-limpiar-filtros" class="btn-outline-sm">Limpiar</button>
+          <button id="btn-export-excel" class="btn-export-excel">📊 Excel</button>
+          <button id="btn-export-pdf" class="btn-export-pdf">📄 PDF</button>
+        </div>
+      </div>
+
+      <div class="kpi-grid">
+        <div class="kpi-card">
+          <span class="kpi-title">Recaudación Total Ventas</span>
+          <strong class="kpi-value" id="kpi-recaudacion">$0</strong>
+        </div>
+        <div class="kpi-card highlight">
+          <span class="kpi-title">Efectivo Físico en Cajón Ahora</span>
+          <strong class="kpi-value" id="kpi-efectivo-cajon">$0</strong>
+          <small>Fondo Inicial + Efectivo Ventas - Salidas</small>
+        </div>
+        <div class="kpi-card">
+          <span class="kpi-title">Medios Digitales</span>
+          <strong class="kpi-value" id="kpi-digital">$0</strong>
+        </div>
+        <div class="kpi-card">
+          <span class="kpi-title">Tickets / Promedio</span>
+          <strong class="kpi-value" id="kpi-tickets">0 ($0)</strong>
+        </div>
+      </div>
+
+      <div class="two-col-grid mt-16">
+        <div class="card">
+          <h2>Rendimiento por Empleado</h2>
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Empleado</th>
+                <th>Tickets</th>
+                <th>Total Vendido</th>
+                <th>Promedio</th>
+                <th>% Local</th>
+              </tr>
+            </thead>
+            <tbody id="tbody-empleados"></tbody>
+          </table>
+        </div>
+
+        <div class="card">
+          <h2>Ventas por Rubro</h2>
+          <div id="bars-rubros" class="bar-chart"></div>
+          <h2 class="mt-16">Ventas por Medio de Pago</h2>
+          <div id="bars-medios" class="bar-chart"></div>
+        </div>
+      </div>
+
+      <div class="two-col-grid mt-16">
+        <div class="card">
+          <h2>Ventas por Hora</h2>
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Hora</th>
+                <th>Tickets</th>
+                <th>Total ($)</th>
+              </tr>
+            </thead>
+            <tbody id="tbody-horas"></tbody>
+          </table>
+
+          <h2 class="mt-16">Ventas por Día</h2>
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Fecha</th>
+                <th>Día</th>
+                <th>Tickets</th>
+                <th>Total ($)</th>
+              </tr>
+            </thead>
+            <tbody id="tbody-dias"></tbody>
+          </table>
+        </div>
+
+        <div class="card">
+          <h2>Cierres de Caja del Día e Histórico</h2>
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Apertura</th>
+                <th>Cajero</th>
+                <th>Declarado</th>
+                <th>Esperado</th>
+                <th>Diferencia</th>
+                <th>Estado</th>
+              </tr>
+            </thead>
+            <tbody id="tbody-arqueos"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- ====================================================================
+         VISTA INDEPENDIENTE: ADMINISTRACIÓN DE CATÁLOGO (RUBROS Y FIADO)
+         ==================================================================== -->
+    <section id="view-catalogo" class="view-section">
+      <div class="two-col-grid">
+        <div class="card">
+          <h2>Nuevo Rubro / Familia</h2>
+          <form id="form-nuevo-rubro" class="form-stack mt-16">
+            <label for="input-nuevo-rubro">Nombre del Rubro</label>
+            <input type="text" id="input-nuevo-rubro" placeholder="Ej: Congelados" required />
+            <button type="submit" class="btn-primary-xl">➕ Agregar Rubro</button>
+          </form>
+
+          <h2 class="mt-16">Rubros Activos</h2>
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Rubro</th>
+                <th>Acción</th>
+              </tr>
+            </thead>
+            <tbody id="tbody-catalogo-rubros"></tbody>
+          </table>
+        </div>
+
+        <div class="card">
+          <h2>Clientes de Cuenta Corriente</h2>
+          <form id="form-nuevo-cliente-fiado" class="form-stack mt-16">
+            <label for="input-cli-nombre">Nombre del Cliente</label>
+            <input type="text" id="input-cli-nombre" placeholder="Ej: Familia Pérez" required />
+            <label for="input-cli-tel">Teléfono / Documento</label>
+            <input type="text" id="input-cli-tel" placeholder="Ej: 11-5555-4444" />
+            <label for="input-cli-limite">Límite de Crédito ($)</label>
+            <input type="number" id="input-cli-limite" min="0" value="40000" required />
+            <button type="submit" class="btn-primary-xl">➕ Agregar Cliente</button>
+          </form>
+
+          <h2 class="mt-16">Clientes Habilitados</h2>
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Cliente</th>
+                <th>Límite</th>
+                <th>Deuda</th>
+                <th>Disponible</th>
+              </tr>
+            </thead>
+            <tbody id="tbody-catalogo-clientes"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- ====================================================================
+         VISTA INDEPENDIENTE: ADMINISTRACIÓN DE PERSONAL
+         ==================================================================== -->
+    <section id="view-personal" class="view-section">
+      <div class="two-col-grid">
+        <div class="card">
+          <h2>Alta de Personal</h2>
+          <form id="form-nuevo-empleado" class="form-stack mt-16">
+            <label for="input-emp-nombre">Nombre Completo</label>
+            <input type="text" id="input-emp-nombre" placeholder="Ej: Sofía Turno Tarde" required />
+            <label for="input-emp-user">Usuario de Acceso</label>
+            <input type="text" id="input-emp-user" placeholder="Ej: sofia" required />
+            <label for="input-emp-pin">PIN / Contraseña</label>
+            <input type="password" id="input-emp-pin" placeholder="••••" required />
+            <label for="select-emp-rol">Rol en el Comercio</label>
+            <select id="select-emp-rol">
+              <option value="CAJERO">Cajero</option>
+              <option value="SUPERVISOR">Supervisor</option>
+              <option value="DUENO">Dueño</option>
+            </select>
+            <button type="submit" class="btn-primary-xl">👤 Registrar Personal</button>
+          </form>
+        </div>
+
+        <div class="card">
+          <h2>Personal Registrado</h2>
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Nombre</th>
+                <th>Usuario</th>
+                <th>Rol</th>
+                <th>Estado</th>
+              </tr>
+            </thead>
+            <tbody id="tbody-personal-lista"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- ====================================================================
+         VISTA INDEPENDIENTE: AUDITORÍA Y CONTROL DE TICKETS
+         ==================================================================== -->
+    <section id="view-auditoria" class="view-section">
+      <div class="two-col-grid">
+        <div class="card">
+          <div class="dashboard-toolbar">
+            <h2>Registro de Auditoría</h2>
+            <select id="filtro-auditoria-accion" class="input-xl" style="max-width:240px;">
+              <option value="">Todas las acciones</option>
+              <option value="APERTURA_CAJA">Apertura de Caja</option>
+              <option value="CIERRE_ARQUEO_CIEGO">Cierre / Arqueo</option>
+              <option value="ENTRADA_DINERO">Entrada de Dinero</option>
+              <option value="SALIDA_DINERO">Salida de Dinero</option>
+              <option value="APERTURA_CAJON_SIN_VENTA">Apertura de Cajón</option>
+              <option value="ANULACION_TICKET">Anulación de Ticket</option>
+              <option value="MODIFICACION_CATALOGO">Modificación Catálogo</option>
+            </select>
+          </div>
+          <div id="audit-log-list" class="audit-list mt-16"></div>
+        </div>
+
+        <div class="card">
+          <h2>Últimos Tickets y Anulaciones</h2>
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>Cajero</th>
+                <th>Unid.</th>
+                <th>Total</th>
+                <th>Estado</th>
+                <th>Acción</th>
+              </tr>
+            </thead>
+            <tbody id="tbody-ultimas-ventas"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <div id="pos-toast" class="toast hidden"></div>
+
+  <script src="standalone-engine.js"></script>
+  <script src="app.js"></script>
+</body>
+
+</html>

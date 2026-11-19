@@ -1,0 +1,13 @@
+{
+  "name": "caja-y-arqueo",
+  "version": "1.0.0",
+  "description": "Sistema de Conteo de Ventas (Sin Stock), Control de Turnos, Arqueo Ciego y Analítica en Tiempo Real",
+  "private": true,
+  "type": "commonjs",
+  "scripts": {
+    "start": "node backend/src/server.js",
+    "test": "node --test backend/tests/*.test.js",
+    "seed": "node backend/src/db/seed-cli.js",
+    "build:apk": "node tools/build-apk.js"
+  }
+}
