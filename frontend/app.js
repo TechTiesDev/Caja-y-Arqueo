@@ -63,14 +63,25 @@ function uuidv7Client() {
 }
 
 async function apiFetch(path, options = {}) {
-  // Si se ejecuta dentro del prototipo APK Android (file:// o sin servidor local accesible), usar el motor autónomo embebido
-  if (window.location.protocol === 'file:' && typeof window.handleStandaloneApi === 'function') {
+  // Si se ejecuta dentro del prototipo APK Android (file://) o en modo autónomo, usar el motor embebido
+  if (
+    (window.location.protocol === 'file:' || state.useStandaloneFallback) &&
+    typeof window.handleStandaloneApi === 'function'
+  ) {
     return window.handleStandaloneApi(path, options);
   }
   const headers = { 'Content-Type': 'application/json', ...(options.headers || {}) };
   if (state.token) headers.Authorization = `Bearer ${state.token}`;
   try {
     const res = await fetch(path, { ...options, headers });
+    // Si el hosting estático (ej. Vercel/GitHub Pages sin runtime Node24) devuelve 404/502 en /api, activar motor autónomo
+    if ((res.status === 404 || res.status >= 500) && typeof window.handleStandaloneApi === 'function') {
+      const contentType = res.headers.get('content-type') || '';
+      if (!contentType.includes('application/json')) {
+        state.useStandaloneFallback = true;
+        return window.handleStandaloneApi(path, options);
+      }
+    }
     const data = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(data.error || `Error HTTP ${res.status}`);
     return data;
@@ -79,6 +90,7 @@ async function apiFetch(path, options = {}) {
       (err.name === 'TypeError' || String(err.message).includes('Failed to fetch')) &&
       typeof window.handleStandaloneApi === 'function'
     ) {
+      state.useStandaloneFallback = true;
       return window.handleStandaloneApi(path, options);
     }
     throw err;

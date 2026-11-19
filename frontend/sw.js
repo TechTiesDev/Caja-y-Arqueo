@@ -1,4 +1,4 @@
-const CACHE_NAME = 'caja-arqueo-pwa-v20';
+const CACHE_NAME = 'caja-arqueo-pwa-v21';
 const ASSETS = ['/', '/index.html', '/styles.css', '/app.js'];
 
 self.addEventListener('install', (event) => {
