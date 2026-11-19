@@ -1,0 +1,22 @@
+# Variables de entorno y secretos (NUNCA subir al repositorio)
+.env
+.env.*
+!.env.example
+
+# Claves privadas de firma APK
+tools/.apk-signing-key.json
+*.keystore
+*.jks
+
+# Base de datos SQLite local, archivos WAL/SHM y respaldos
+backend/data/*.sqlite
+backend/data/*.sqlite-wal
+backend/data/*.sqlite-shm
+backend/data/backups/
+
+# Dependencias y temporales
+node_modules/
+.tmp/
+*.log
+.DS_Store
+Thumbs.db
