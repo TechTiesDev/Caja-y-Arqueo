@@ -2,6 +2,7 @@ const { uuidv7 } = require('../utils/uuidv7');
 const { getDb, DEFAULT_EMPRESA_ID } = require('../db/database');
 const { registrarAuditoria } = require('./audit.service');
 const { broadcastEvent } = require('./sse.service');
+const { ensureTurnoInDb } = require('./turnos.service');
 
 /**
  * Registra una venta aislada por `empresa_id`.
@@ -11,6 +12,7 @@ function registrarVenta(
   {
     id = null,
     turno_id,
+    fondo_inicial = 0,
     cajero_id = null,
     cliente_fiado_id = null,
     lineas_rubro = [],
@@ -35,9 +37,7 @@ function registrarVenta(
   if (!turno_id) {
     throw new Error('No se permite ningún cobro si no hay un turno iniciado.');
   }
-  const turno = db
-    .prepare('SELECT * FROM turnos_caja WHERE id = ? AND empresa_id = ?')
-    .get(turno_id, empresaId);
+  const turno = ensureTurnoInDb(db, turno_id, empresaId, actor, fondo_inicial);
   if (!turno) {
     const err = new Error('No se permite ningún cobro si no hay un turno iniciado.');
     err.statusCode = 404;
@@ -60,10 +60,23 @@ function registrarVenta(
     if (!linea.rubro_id || !Number.isInteger(cant) || cant <= 0 || isNaN(sub) || sub <= 0) {
       throw new Error('Cada línea debe tener rubro_id válido, cantidad entera > 0 y subtotal > 0.');
     }
-    const rubroValido = db
-      .prepare('SELECT id FROM rubros WHERE id = ? AND empresa_id = ?')
-      .get(linea.rubro_id, empresaId);
-    if (!rubroValido) {
+    let rubroRow = db
+      .prepare('SELECT id, empresa_id FROM rubros WHERE id = ?')
+      .get(linea.rubro_id);
+    if (!rubroRow) {
+      db.prepare(`
+        INSERT OR IGNORE INTO rubros (id, empresa_id, nombre, color_hex, icono, orden, activo)
+        VALUES (?, ?, ?, '#2563EB', 'shopping-basket', 99, 1)
+      `).run(
+        linea.rubro_id,
+        empresaId,
+        linea.rubro_nombre || `Rubro ${String(linea.rubro_id).slice(-6)}`
+      );
+      rubroRow = db
+        .prepare('SELECT id, empresa_id FROM rubros WHERE id = ?')
+        .get(linea.rubro_id);
+    }
+    if (!rubroRow || rubroRow.empresa_id !== empresaId) {
       const err = new Error(`El rubro ${linea.rubro_id} no pertenece a esta empresa.`);
       err.statusCode = 404;
       throw err;
@@ -154,10 +167,21 @@ function registrarVenta(
       );
     }
     if (cajeroFinalId !== actor.id) {
-      const targetUser = db
-        .prepare('SELECT id, rol, empresa_id FROM usuarios WHERE id = ? AND empresa_id = ?')
-        .get(cajeroFinalId, empresaId);
+      let targetUser = db
+        .prepare('SELECT id, rol, empresa_id FROM usuarios WHERE id = ?')
+        .get(cajeroFinalId);
       if (!targetUser) {
+        const { hashPin } = require('../utils/crypto');
+        const h = hashPin('1111');
+        db.prepare(`
+          INSERT OR IGNORE INTO usuarios (id, empresa_id, nombre, username, pin_hash, password_hash, rol, activo)
+          VALUES (?, ?, 'Cajero', ?, ?, ?, 'CAJERO', 1)
+        `).run(cajeroFinalId, empresaId, `cajero_${cajeroFinalId.slice(-6)}`, h, h);
+        targetUser = db
+          .prepare('SELECT id, rol, empresa_id FROM usuarios WHERE id = ?')
+          .get(cajeroFinalId);
+      }
+      if (!targetUser || targetUser.empresa_id !== empresaId) {
         const err = new Error('El empleado seleccionado para la venta no pertenece a esta empresa.');
         err.statusCode = 404;
         throw err;

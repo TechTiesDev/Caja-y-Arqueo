@@ -895,6 +895,7 @@ async function confirmarVentaFinal() {
   const payload = {
     id: uuidv7Client(),
     turno_id: state.turnoActivo.id,
+    fondo_inicial: Number(state.turnoActivo.fondo_inicial || 0),
     cajero_id: state.wizard.cajero?.id || state.usuario?.id,
     cliente_fiado_id: state.wizard.clienteFiado?.id || null,
     lineas_rubro: lineasRubro,
@@ -1073,6 +1074,7 @@ async function confirmarMovimientoEfectivo() {
       method: 'POST',
       body: JSON.stringify({
         turno_id: state.turnoActivo.id,
+        fondo_inicial: Number(state.turnoActivo.fondo_inicial || 0),
         usuario_id: state.movWizard.empleado?.id || state.usuario?.id,
         tipo: state.movWizard.tipo,
         categoria,
@@ -1750,7 +1752,7 @@ window.addEventListener('DOMContentLoaded', async () => {
     }
   });
 
-  if (window.location.protocol !== 'file:') {
+  if (window.location.protocol !== 'file:' && !window.location.hostname.endsWith('.vercel.app')) {
     try {
       const evtSource = new EventSource('/api/analitica/stream');
       evtSource.onmessage = () => {

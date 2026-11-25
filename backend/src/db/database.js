@@ -76,7 +76,7 @@ function seedCompanyCatalogs(db, empresaId, useFixedIds = false) {
       ['rub-verduleria', 'Verdulería', '#65A30D', 'apple', 7],
     ];
     for (const [fixedId, nombre, color, icono, orden] of rubrosBase) {
-      const id = useFixedIds ? fixedId : `rub-${uuidv7().slice(-8)}`;
+      const id = useFixedIds || empresaId === DEFAULT_EMPRESA_ID ? fixedId : `${fixedId}-${empresaId}`;
       insertRubro.run(id, empresaId, nombre, color, icono, orden);
     }
   }
@@ -98,7 +98,7 @@ function seedCompanyCatalogs(db, empresaId, useFixedIds = false) {
       ['mp-fiado', 'CUENTA_CORRIENTE', 'Cuenta Corriente (Fiado)', 0, 1, 0, 5],
     ];
     for (const [fixedId, codigo, nombre, reqVuelto, reqCli, esEf, orden] of mediosBase) {
-      const id = useFixedIds ? fixedId : `mp-${uuidv7().slice(-8)}`;
+      const id = useFixedIds || empresaId === DEFAULT_EMPRESA_ID ? fixedId : `${fixedId}-${empresaId}`;
       insertMedio.run(id, empresaId, codigo, nombre, reqVuelto, reqCli, esEf, orden);
     }
   }

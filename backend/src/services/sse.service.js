@@ -1,13 +1,32 @@
 const clients = new Set();
 
 function subscribeClient(res) {
+  const isServerless = Boolean(
+    process.env.VERCEL ||
+      process.env.AWS_LAMBDA_FUNCTION_NAME ||
+      (process.env.DB_PATH && process.env.DB_PATH.includes('tmp'))
+  );
+
   res.writeHead(200, {
     'Content-Type': 'text/event-stream',
     'Cache-Control': 'no-cache',
-    Connection: 'keep-alive',
+    Connection: isServerless ? 'close' : 'keep-alive',
     'Access-Control-Allow-Origin': '*',
   });
-  res.write(`data: ${JSON.stringify({ type: 'CONNECTED', timestamp: new Date().toISOString() })}\n\n`);
+  res.write(
+    `retry: 60000\ndata: ${JSON.stringify({
+      type: 'CONNECTED',
+      serverless: isServerless,
+      timestamp: new Date().toISOString(),
+    })}\n\n`
+  );
+
+  // En entornos Serverless (Vercel), cerrar inmediatamente para no bloquear la instancia Lambda
+  // ni forzar el balanceador a crear contenedores paralelos con bases /tmp aisladas
+  if (isServerless) {
+    return res.end();
+  }
+
   clients.add(res);
   res.on('close', () => {
     clients.delete(res);
