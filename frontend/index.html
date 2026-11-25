@@ -32,7 +32,13 @@
         <input type="text" id="login-username" class="input-xl" value="lucas" required />
 
         <label for="login-pin">PIN / Contraseña</label>
-        <input type="password" id="login-pin" class="input-xl" value="1111" placeholder="••••" required />
+        <div class="password-field-wrap">
+          <input type="password" id="login-pin" class="input-xl" value="1111" placeholder="••••" required />
+          <button type="button" id="btn-toggle-login-pin" class="btn-pass-eye" title="Mostrar / ocultar contraseña"
+            aria-label="Mostrar u ocultar contraseña">
+            👁 Ver
+          </button>
+        </div>
 
         <button type="submit" class="btn-primary-xl mt-16">Iniciar Sesión</button>
         <button type="button" id="btn-show-register-empresa" class="btn-secondary">
@@ -48,7 +54,13 @@
         <input type="text" id="reg-emp-tel" class="input-xl" placeholder="Teléfono del Comercio" />
         <input type="text" id="reg-dueno-nombre" class="input-xl" placeholder="Nombre del Dueño *" required />
         <input type="email" id="reg-dueno-email" class="input-xl" placeholder="Email del Dueño (Login) *" required />
-        <input type="password" id="reg-dueno-pass" class="input-xl" placeholder="PIN o Contraseña *" required />
+        <div class="password-field-wrap">
+          <input type="password" id="reg-dueno-pass" class="input-xl" placeholder="PIN o Contraseña *" required />
+          <button type="button" id="btn-toggle-reg-pass" class="btn-pass-eye" title="Mostrar / ocultar contraseña"
+            aria-label="Mostrar u ocultar contraseña">
+            👁 Ver
+          </button>
+        </div>
         <small class="muted-note">* Campo obligatorio</small>
         <button type="submit" class="btn-primary-xl">Crear Empresa e Ingresar</button>
         <button type="button" id="btn-back-to-login" class="btn-secondary">⬅ Volver a Iniciar Sesión</button>
@@ -98,6 +110,7 @@
       <button class="nav-tab sidebar-btn active" data-soporte-tab="empresas">🏢 Empresas</button>
       <button class="nav-tab sidebar-btn" data-soporte-tab="password">🔑 Cambio de Contraseña</button>
       <button class="nav-tab sidebar-btn" data-soporte-tab="usuarios">👥 Usuarios Soporte</button>
+      <button class="nav-tab sidebar-btn" data-soporte-tab="storage">💾 Almacenamiento y Backup</button>
     </div>
 
     <div class="sidebar-footer">
@@ -175,6 +188,39 @@
               <input type="password" id="sop-usr-pass" class="input-xl" required />
               <button type="submit" class="btn-primary-xl">➕ Crear Usuario Soporte</button>
             </form>
+          </div>
+        </div>
+      </div>
+
+      <!-- Sub-vista 4: Almacenamiento y Hot Backup SQLite / PostgreSQL (Core Blueprint) -->
+      <div id="soporte-pane-storage" class="soporte-pane hidden">
+        <div class="two-col-grid">
+          <div class="card">
+            <h2>Estado de Almacenamiento</h2>
+            <p class="muted-note" id="soporte-storage-resumen">Cargando métricas de cuota...</p>
+            <div class="form-stack mt-16">
+              <button type="button" id="btn-ejecutar-hot-backup" class="btn-primary-xl">
+                💾 Ejecutar Hot Backup SQLite (SHA-256)
+              </button>
+              <button type="button" id="btn-exportar-storage-manifest" class="btn-secondary">
+                📦 Exportar Manifiesto de Archivos
+              </button>
+            </div>
+          </div>
+
+          <div class="card">
+            <h2>Historial de Backups Verificados</h2>
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>Fecha</th>
+                  <th>Tipo</th>
+                  <th>Tamaño</th>
+                  <th>Checksum SHA-256</th>
+                </tr>
+              </thead>
+              <tbody id="tbody-backups-soporte"></tbody>
+            </table>
           </div>
         </div>
       </div>

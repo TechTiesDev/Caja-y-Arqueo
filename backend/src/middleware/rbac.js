@@ -54,7 +54,36 @@ function getCurrentUser(req, { db = getDb(), allowWithoutCompany = false } = {})
   }
 
   const userId = payload.sub || payload.id;
-  const user = db.prepare('SELECT * FROM usuarios WHERE id = ?').get(userId);
+  let user = db.prepare('SELECT * FROM usuarios WHERE id = ?').get(userId);
+
+  // Si el JWT es válido pero la instancia Serverless (ej. Vercel /tmp) reinició la BD en memoria, rehidratar contexto
+  if (!user && payload.rol && (payload.username || payload.email)) {
+    if (payload.empresa_id) {
+      const empExists = db.prepare('SELECT id FROM empresas WHERE id = ?').get(payload.empresa_id);
+      if (!empExists) {
+        const { seedCompanyCatalogs } = require('../db/database');
+        db.prepare(`
+          INSERT INTO empresas (id, nombre, activo) VALUES (?, ?, 1)
+        `).run(payload.empresa_id, payload.empresa_nombre || 'Comercio Activo');
+        seedCompanyCatalogs(db, payload.empresa_id, false);
+      }
+    }
+    const { hashPin } = require('../utils/crypto');
+    db.prepare(`
+      INSERT OR IGNORE INTO usuarios (id, empresa_id, nombre, username, email, pin_hash, rol, activo)
+      VALUES (?, ?, ?, ?, ?, ?, ?, 1)
+    `).run(
+      userId,
+      payload.empresa_id || null,
+      payload.nombre || 'Usuario',
+      payload.username || payload.email,
+      payload.email || null,
+      hashPin('9999'),
+      payload.rol
+    );
+    user = db.prepare('SELECT * FROM usuarios WHERE id = ?').get(userId);
+  }
+
   if (!user || !user.activo) {
     const err = new Error('Usuario inexistente o deshabilitado.');
     err.statusCode = 401;
@@ -82,7 +111,16 @@ function getCurrentUser(req, { db = getDb(), allowWithoutCompany = false } = {})
     user.empresa_nombre = empresa.nombre;
   } else if (user.rol === 'SOPORTE') {
     if (payload.empresa_id !== null && payload.empresa_id !== undefined) {
-      const empresa = db.prepare('SELECT * FROM empresas WHERE id = ?').get(payload.empresa_id);
+      let empresa = db.prepare('SELECT * FROM empresas WHERE id = ?').get(payload.empresa_id);
+      if (!empresa && payload.empresa_nombre) {
+        const { seedCompanyCatalogs } = require('../db/database');
+        db.prepare('INSERT INTO empresas (id, nombre, activo) VALUES (?, ?, 1)').run(
+          payload.empresa_id,
+          payload.empresa_nombre
+        );
+        seedCompanyCatalogs(db, payload.empresa_id, false);
+        empresa = db.prepare('SELECT * FROM empresas WHERE id = ?').get(payload.empresa_id);
+      }
       if (!empresa) {
         const err = new Error('Empresa no encontrada');
         err.statusCode = 404;

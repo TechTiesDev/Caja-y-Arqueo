@@ -1,0 +1,30 @@
+/* ============================================================================
+   COMPONENTES TÁCTILES BISELADOS, CINTA ALMENDRA Y TRANSICIONES 500ms
+   ============================================================================ */
+@keyframes uiFadeSlideUp {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.view-section.active,
+.wizard-step.active,
+.soporte-pane {
+  animation: uiFadeSlideUp var(--dur-med) var(--ease-smooth) both;
+}
+
+.card h2,
+.sidebar-header h2 {
+  font-family: var(--font-display);
+  font-weight: 700;
+  color: var(--brand-title);
+  background: linear-gradient(90deg, #eadfce 0%, var(--surface) 100%);
+  border-left: 4px solid var(--primary-top);
+  padding: 8px 14px;
+  border-radius: 0 10px 10px 0;
+}

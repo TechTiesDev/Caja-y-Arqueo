@@ -157,6 +157,7 @@ function switchView(viewName) {
   }
 
   state.activeView = targetView;
+  persistSessionStorage();
 
   document.querySelectorAll('#main-nav .nav-tab, #sidebar-company-nav .nav-tab').forEach((b) => {
     b.classList.toggle('active', b.dataset.view === targetView);
@@ -178,16 +179,20 @@ function switchView(viewName) {
 
 function switchSoporteSubTab(subTab) {
   state.soporteSubTab = subTab;
+  persistSessionStorage();
   document.querySelectorAll('#sidebar-soporte-nav .nav-tab').forEach((b) => {
     b.classList.toggle('active', b.dataset.soporteTab === subTab);
   });
   document.getElementById('soporte-pane-empresas').classList.toggle('hidden', subTab !== 'empresas');
   document.getElementById('soporte-pane-password').classList.toggle('hidden', subTab !== 'password');
   document.getElementById('soporte-pane-usuarios').classList.toggle('hidden', subTab !== 'usuarios');
+  const paneStorage = document.getElementById('soporte-pane-storage');
+  if (paneStorage) paneStorage.classList.toggle('hidden', subTab !== 'storage');
   toggleSidebar(false);
 
   if (subTab === 'empresas') loadEmpresasSoporte();
   if (subTab === 'usuarios') loadUsuariosSoporte();
+  if (subTab === 'storage') loadStorageAndBackupsSoporte();
 }
 
 function clearRestrictedPanelsDOM(rol) {
@@ -207,15 +212,33 @@ function clearRestrictedPanelsDOM(rol) {
   }
 }
 
+function persistSessionStorage() {
+  if (!state.token || !state.usuario) return;
+  try {
+    localStorage.setItem(
+      'caja_session',
+      JSON.stringify({
+        token: state.token,
+        access_token: state.token,
+        usuario: state.usuario,
+        activeMaintenanceCompanyId: state.activeMaintenanceCompanyId || null,
+        activeView: state.activeView || 'caja',
+        soporteSubTab: state.soporteSubTab || 'empresas',
+      })
+    );
+  } catch {
+    // Ignorar errores de cuota en storage
+  }
+}
+
 /* 1. INICIO DE SESIÓN, REGISTRO DE EMPRESA Y CONTROL DE ROLES / SOPORTE */
 function activateSessionData(res, maintenanceCompanyId = null) {
   state.token = res.access_token || res.token;
   state.usuario = res.usuario;
   state.activeMaintenanceCompanyId = maintenanceCompanyId;
-  localStorage.setItem(
-    'caja_session',
-    JSON.stringify({ ...res, activeMaintenanceCompanyId: maintenanceCompanyId })
-  );
+  if (res.activeView) state.activeView = res.activeView;
+  if (res.soporteSubTab) state.soporteSubTab = res.soporteSubTab;
+  persistSessionStorage();
 
   const loginEl = document.getElementById('login-screen');
   const topbarEl = document.getElementById('app-topbar');
@@ -443,6 +466,39 @@ window.eliminarSoporteUserUI = async (targetId) => {
     showToast(err.message, true);
   }
 };
+
+async function loadStorageAndBackupsSoporte() {
+  try {
+    const statusRes = await apiFetch('/api/v1/sistema/storage/status');
+    const st = statusRes.data || statusRes;
+    const resumenEl = document.getElementById('soporte-storage-resumen');
+    if (resumenEl) {
+      resumenEl.textContent = `Proveedor: ${st.storage_provider} (${st.bucket}) · Archivos: ${st.total_archivos} · Uso: ${st.used_mb} MB / ${st.quota_mb} MB (${st.percent_used}%)`;
+    }
+
+    const backupsRes = await apiFetch('/api/v1/sistema/backups');
+    const items = backupsRes.data?.items || backupsRes.items || [];
+    const tbody = document.getElementById('tbody-backups-soporte');
+    if (tbody) {
+      tbody.innerHTML = items.length
+        ? items
+            .map(
+              (b) => `
+          <tr>
+            <td>${(b.creado_en || '').slice(0, 19).replace('T', ' ')}</td>
+            <td><strong>${b.tipo}</strong></td>
+            <td>${Math.round(Number(b.tamano_bytes || 0) / 1024)} KB</td>
+            <td><code>${(b.checksum_sha256 || '').slice(0, 16)}...</code></td>
+          </tr>
+        `
+            )
+            .join('')
+        : '<tr><td colspan="4" class="muted-note">Sin respaldos ejecutados aún.</td></tr>';
+    }
+  } catch (err) {
+    showToast(err.message, true);
+  }
+}
 
 /* 2. CARGA DE CATÁLOGOS Y ESTADO DE TURNOS DE LA EMPRESA ACTIVA */
 async function refreshAll() {
@@ -1327,6 +1383,28 @@ window.addEventListener('DOMContentLoaded', async () => {
   };
 
   // Inicio de sesión
+  const btnToggleLoginPin = document.getElementById('btn-toggle-login-pin');
+  if (btnToggleLoginPin) {
+    btnToggleLoginPin.onclick = () => {
+      const pinInput = document.getElementById('login-pin');
+      if (!pinInput) return;
+      const isHidden = pinInput.type === 'password';
+      pinInput.type = isHidden ? 'text' : 'password';
+      btnToggleLoginPin.textContent = isHidden ? '🙈 Ocultar' : '👁 Ver';
+    };
+  }
+
+  const btnToggleRegPass = document.getElementById('btn-toggle-reg-pass');
+  if (btnToggleRegPass) {
+    btnToggleRegPass.onclick = () => {
+      const regPassInput = document.getElementById('reg-dueno-pass');
+      if (!regPassInput) return;
+      const isHidden = regPassInput.type === 'password';
+      regPassInput.type = isHidden ? 'text' : 'password';
+      btnToggleRegPass.textContent = isHidden ? '🙈 Ocultar' : '👁 Ver';
+    };
+  }
+
   document.getElementById('form-login').onsubmit = async (e) => {
     e.preventDefault();
     const username = document.getElementById('login-username').value;
@@ -1604,6 +1682,32 @@ window.addEventListener('DOMContentLoaded', async () => {
     filtroAuditoria.onchange = () => loadVistaAuditoria();
   }
 
+  const btnHotBackup = document.getElementById('btn-ejecutar-hot-backup');
+  if (btnHotBackup) {
+    btnHotBackup.onclick = async () => {
+      try {
+        await apiFetch('/api/v1/sistema/backups/ejecutar', { method: 'POST' });
+        showToast('Hot Backup SQLite ejecutado y verificado con SHA-256.');
+        await loadStorageAndBackupsSoporte();
+      } catch (err) {
+        showToast(err.message, true);
+      }
+    };
+  }
+
+  const btnExportManifest = document.getElementById('btn-exportar-storage-manifest');
+  if (btnExportManifest) {
+    btnExportManifest.onclick = async () => {
+      try {
+        const res = await apiFetch('/api/v1/sistema/storage/backup');
+        const manifest = res.data?.manifest || res.manifest || {};
+        showToast(`Manifiesto exportado (${manifest.total_archivos || 0} archivos).`);
+      } catch (err) {
+        showToast(err.message, true);
+      }
+    };
+  }
+
   document.getElementById('form-nuevo-empleado').onsubmit = async (e) => {
     e.preventDefault();
     try {
@@ -1659,6 +1763,42 @@ window.addEventListener('DOMContentLoaded', async () => {
       };
     } catch {
       // Silencioso
+    }
+  }
+
+  // Restaurar sesión iniciada automáticamente al volver a abrir o recargar la aplicación
+  const savedSessionRaw = localStorage.getItem('caja_session');
+  if (savedSessionRaw) {
+    let savedSession = null;
+    try {
+      savedSession = JSON.parse(savedSessionRaw);
+    } catch {
+      localStorage.removeItem('caja_session');
+    }
+
+    if (savedSession && savedSession.usuario && (savedSession.token || savedSession.access_token)) {
+      const restoredView = savedSession.activeView || 'caja';
+      const restoredSubTab = savedSession.soporteSubTab || 'empresas';
+      activateSessionData(
+        savedSession,
+        savedSession.activeMaintenanceCompanyId !== undefined
+          ? savedSession.activeMaintenanceCompanyId
+          : savedSession.usuario.empresa_id || null
+      );
+
+      if (isSoporte() && !isInCompany()) {
+        switchView('soporte');
+        switchSoporteSubTab(restoredSubTab);
+      } else {
+        try {
+          await refreshAll();
+        } catch {
+          // Mantener la sesión activa aunque falle temporalmente la carga inicial
+        }
+        resetWizard();
+        resetMovWizard();
+        switchView(restoredView);
+      }
     }
   }
 });

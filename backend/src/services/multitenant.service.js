@@ -53,10 +53,11 @@ function registerEmpresa(
       VALUES (?, ?, ?, ?, ?, ?, 1, ?, ?)
     `).run(empresaId, empName, identificador_fiscal, telefono, email_empresa || emailNorm, direccion, now, now);
 
+    const hashed = hashPin(pass);
     db.prepare(`
-      INSERT INTO usuarios (id, empresa_id, nombre, username, email, telefono, pin_hash, rol, activo, creado_en, actualizado_en)
-      VALUES (?, ?, ?, ?, ?, ?, ?, 'DUENO', 1, ?, ?)
-    `).run(duenoId, empresaId, duenoName, usernameNorm, emailNorm, telefono_dueno, hashPin(pass), now, now);
+      INSERT INTO usuarios (id, empresa_id, nombre, username, email, telefono, pin_hash, password_hash, rol, activo, creado_en, actualizado_en)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'DUENO', 1, ?, ?)
+    `).run(duenoId, empresaId, duenoName, usernameNorm, emailNorm, telefono_dueno, hashed, hashed, now, now);
 
     seedCompanyCatalogs(db, empresaId, false);
     db.exec('COMMIT;');
@@ -140,9 +141,10 @@ function crearUsuarioEmpresa(db = getDb(), payload, actor) {
   // Ignorar cualquier empresa_id enviado en el body y forzar siempre actor.empresa_id
   const id = `usr-${uuidv7().slice(-10)}`;
   const now = new Date().toISOString();
+  const hashed = hashPin(pass);
   db.prepare(`
-    INSERT INTO usuarios (id, empresa_id, nombre, username, email, telefono, pin_hash, rol, activo, creado_en, actualizado_en)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)
+    INSERT INTO usuarios (id, empresa_id, nombre, username, email, telefono, pin_hash, password_hash, rol, activo, creado_en, actualizado_en)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)
   `).run(
     id,
     actor.empresa_id,
@@ -150,7 +152,8 @@ function crearUsuarioEmpresa(db = getDb(), payload, actor) {
     username,
     email,
     payload.telefono || null,
-    hashPin(pass),
+    hashed,
+    hashed,
     rol,
     now,
     now
@@ -182,11 +185,13 @@ function editarUsuarioEmpresa(db = getDb(), targetId, payload, actor) {
   const nuevoRol = payload.rol !== undefined ? normalizarRolInterno(payload.rol) : target.rol;
   const nuevoActivo = payload.activo !== undefined ? (payload.activo ? 1 : 0) : target.activo;
   const nuevoHash =
-    payload.password || payload.pin ? hashPin(payload.password || payload.pin) : target.pin_hash;
+    payload.password || payload.pin
+      ? hashPin(payload.password || payload.pin)
+      : target.pin_hash || target.password_hash;
 
   db.prepare(`
     UPDATE usuarios
-    SET nombre = ?, email = ?, telefono = ?, rol = ?, activo = ?, pin_hash = ?, actualizado_en = ?
+    SET nombre = ?, email = ?, telefono = ?, rol = ?, activo = ?, pin_hash = ?, password_hash = ?, actualizado_en = ?
     WHERE id = ? AND empresa_id = ?
   `).run(
     nuevoNombre,
@@ -194,6 +199,7 @@ function editarUsuarioEmpresa(db = getDb(), targetId, payload, actor) {
     nuevoTel,
     nuevoRol,
     nuevoActivo,
+    nuevoHash,
     nuevoHash,
     new Date().toISOString(),
     targetId,
@@ -257,10 +263,11 @@ function crearUsuarioSoporte(db = getDb(), payload, actor) {
 
   const id = `usr-sop-${uuidv7().slice(-8)}`;
   const now = new Date().toISOString();
+  const hashed = hashPin(pass);
   db.prepare(`
-    INSERT INTO usuarios (id, empresa_id, nombre, username, email, telefono, pin_hash, rol, activo, creado_en, actualizado_en)
-    VALUES (?, NULL, ?, ?, ?, ?, ?, 'SOPORTE', 1, ?, ?)
-  `).run(id, nombre, username, email, payload.telefono || null, hashPin(pass), now, now);
+    INSERT INTO usuarios (id, empresa_id, nombre, username, email, telefono, pin_hash, password_hash, rol, activo, creado_en, actualizado_en)
+    VALUES (?, NULL, ?, ?, ?, ?, ?, ?, 'SOPORTE', 1, ?, ?)
+  `).run(id, nombre, username, email, payload.telefono || null, hashed, hashed, now, now);
 
   return db
     .prepare('SELECT id, empresa_id, nombre, username, email, telefono, rol, activo, creado_en FROM usuarios WHERE id = ?')
@@ -281,13 +288,15 @@ function editarUsuarioSoporte(db = getDb(), targetId, payload, actor) {
   const nuevoTel = payload.telefono !== undefined ? payload.telefono : target.telefono;
   const nuevoActivo = payload.activo !== undefined ? (payload.activo ? 1 : 0) : target.activo;
   const nuevoHash =
-    payload.password || payload.pin ? hashPin(payload.password || payload.pin) : target.pin_hash;
+    payload.password || payload.pin
+      ? hashPin(payload.password || payload.pin)
+      : target.pin_hash || target.password_hash;
 
   db.prepare(`
     UPDATE usuarios
-    SET nombre = ?, email = ?, telefono = ?, activo = ?, pin_hash = ?, actualizado_en = ?
+    SET nombre = ?, email = ?, telefono = ?, activo = ?, pin_hash = ?, password_hash = ?, actualizado_en = ?
     WHERE id = ? AND rol = 'SOPORTE'
-  `).run(nuevoNombre, nuevoEmail, nuevoTel, nuevoActivo, nuevoHash, new Date().toISOString(), targetId);
+  `).run(nuevoNombre, nuevoEmail, nuevoTel, nuevoActivo, nuevoHash, nuevoHash, new Date().toISOString(), targetId);
 
   return db
     .prepare('SELECT id, empresa_id, nombre, username, email, telefono, rol, activo, actualizado_en FROM usuarios WHERE id = ?')
@@ -423,13 +432,15 @@ function cambiarPasswordPropia(db = getDb(), { password_actual, password_nueva }
     throw err;
   }
   const user = db.prepare('SELECT * FROM usuarios WHERE id = ?').get(actor.id);
-  if (!user || !verifyPin(password_actual, user.pin_hash)) {
+  if (!user || !verifyPin(password_actual, user.pin_hash || user.password_hash)) {
     const err = new Error('La contraseña/PIN actual es incorrecta.');
     err.statusCode = 400;
     throw err;
   }
-  db.prepare('UPDATE usuarios SET pin_hash = ?, actualizado_en = ? WHERE id = ?').run(
-    hashPin(password_nueva),
+  const hashed = hashPin(password_nueva);
+  db.prepare('UPDATE usuarios SET pin_hash = ?, password_hash = ?, actualizado_en = ? WHERE id = ?').run(
+    hashed,
+    hashed,
     new Date().toISOString(),
     actor.id
   );

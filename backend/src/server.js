@@ -45,8 +45,10 @@ const {
   cambiarPasswordPropia,
 } = require('./services/multitenant.service');
 const { subscribeClient } = require('./services/sse.service');
+const { createModularApp } = require('./app');
 
 const FRONTEND_DIR = path.join(__dirname, '..', '..', 'frontend');
+const modularApp = createModularApp();
 
 function sendJson(res, statusCode, data) {
   res.writeHead(statusCode, {
@@ -87,6 +89,9 @@ async function handleRequest(req, res) {
   const url = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
   // Normalizar prefijo /auth/* -> /api/auth/* para compatibilidad con ambos esquemas
   const rawPathname = url.pathname;
+  if (rawPathname.startsWith('/api/v1/')) {
+    return modularApp.handleRequest(req, res);
+  }
   const pathname = rawPathname.startsWith('/auth/') ? `/api${rawPathname}` : rawPathname;
   const db = getDb();
 
@@ -117,7 +122,7 @@ async function handleRequest(req, res) {
         )
         .get(cred, cred);
 
-      if (!user || !verifyPin(pass, user.pin_hash)) {
+      if (!user || !verifyPin(pass, user.pin_hash || user.password_hash)) {
         return sendJson(res, 401, { error: 'Credenciales o PIN incorrectos.' });
       }
 

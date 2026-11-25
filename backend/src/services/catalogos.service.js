@@ -135,16 +135,18 @@ function crearEmpleado(db = getDb(), { nombre, username, email = null, pin, rol 
   }
   const empresaId = (actor && actor.empresa_id) || DEFAULT_EMPRESA_ID;
   const id = `usr-${uuidv7().slice(-8)}`;
+  const hashed = hashPin(pin);
   db.prepare(`
-    INSERT INTO usuarios (id, empresa_id, nombre, username, email, pin_hash, rol, activo)
-    VALUES (?, ?, ?, ?, ?, ?, ?, 1)
+    INSERT INTO usuarios (id, empresa_id, nombre, username, email, pin_hash, password_hash, rol, activo)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1)
   `).run(
     id,
     empresaId,
     String(nombre).trim(),
     String(username).trim().toLowerCase(),
     email ? String(email).trim().toLowerCase() : null,
-    hashPin(pin),
+    hashed,
+    hashed,
     rol
   );
 

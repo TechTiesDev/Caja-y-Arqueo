@@ -16,14 +16,14 @@ function createDatabase(dbPath = process.env.DB_PATH || DEFAULT_DB_PATH) {
     if (!fs.existsSync(dir)) {
       fs.mkdirSync(dir, { recursive: true });
     }
-    // Si existe una BD en disco previa al esquema Multi-Tenant (sin tabla empresas), recrear limpiamente
+    // Si existe una BD en disco previa al esquema Core Blueprint (sin tabla respaldos_sistema), recrear limpiamente
     if (fs.existsSync(dbPath)) {
       const checkDb = new DatabaseSync(dbPath);
-      const hasEmpresas = checkDb
-        .prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='empresas'")
+      const hasCoreTables = checkDb
+        .prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='respaldos_sistema'")
         .get();
       checkDb.close();
-      if (!hasEmpresas) {
+      if (!hasCoreTables) {
         fs.unlinkSync(dbPath);
       }
     }
@@ -108,19 +108,32 @@ function seedCompanyCatalogs(db, empresaId, useFixedIds = false) {
  * Sección 4.3: Seed en el arranque del usuario SOPORTE desde variables de entorno.
  */
 function seedInitialSoporte(db) {
+  const soporteEmail = (process.env.INITIAL_SOPORTE_EMAIL || 'soporte@cajayarqueo.com').trim().toLowerCase();
+  const soportePassword = process.env.INITIAL_SOPORTE_PASSWORD || '9999';
+  const hashed = hashPin(soportePassword);
+
   const soporteExistente = db
-    .prepare("SELECT id FROM usuarios WHERE rol = 'SOPORTE' LIMIT 1")
+    .prepare("SELECT id, email, password_hash, pin_hash FROM usuarios WHERE id = 'usr-soporte-01'")
     .get();
-  if (soporteExistente) return;
 
-  const soporteEmail = (process.env.INITIAL_SOPORTE_EMAIL || '').trim().toLowerCase();
-  const soportePassword = process.env.INITIAL_SOPORTE_PASSWORD || '';
-
-  if (soporteEmail && soportePassword) {
+  if (!soporteExistente) {
+    const anySoporte = db.prepare("SELECT id FROM usuarios WHERE rol = 'SOPORTE' LIMIT 1").get();
+    if (!anySoporte) {
+      db.prepare(`
+        INSERT INTO usuarios (id, empresa_id, nombre, username, email, pin_hash, password_hash, rol, activo)
+        VALUES ('usr-soporte-01', NULL, 'Soporte', 'soporte', ?, ?, ?, 'SOPORTE', 1)
+      `).run(soporteEmail, hashed, hashed);
+    }
+  } else if (
+    soporteExistente.email === 'soporte@modular.local' ||
+    !soporteExistente.pin_hash ||
+    !soporteExistente.password_hash
+  ) {
     db.prepare(`
-      INSERT INTO usuarios (id, empresa_id, nombre, username, email, pin_hash, rol, activo)
-      VALUES (?, NULL, 'Soporte', 'soporte', ?, ?, 'SOPORTE', 1)
-    `).run('usr-soporte-01', soporteEmail, hashPin(soportePassword));
+      UPDATE usuarios
+      SET email = ?, pin_hash = ?, password_hash = ?, activo = 1
+      WHERE id = 'usr-soporte-01'
+    `).run(soporteEmail, hashed, hashed);
   }
 }
 
@@ -132,8 +145,8 @@ function seedDefaults(db) {
 
   if (!empExistente) {
     db.prepare(`
-      INSERT INTO empresas (id, nombre, identificador_fiscal, telefono, email, direccion, activo)
-      VALUES (?, 'Almacén Central', '30-71122334-9', '11-4000-5000', 'admin@almacencentral.com', 'Av. Principal 123', 1)
+      INSERT INTO empresas (id, nombre, slug, identificador_fiscal, telefono, email, direccion, activo)
+      VALUES (?, 'Almacén Central', 'almacen-central', '30-71122334-9', '11-4000-5000', 'admin@almacencentral.com', 'Av. Principal 123', 1)
     `).run(DEFAULT_EMPRESA_ID);
   }
 
@@ -144,14 +157,14 @@ function seedDefaults(db) {
 
   if (countUsers === 0) {
     const insertUser = db.prepare(`
-      INSERT INTO usuarios (id, empresa_id, nombre, username, email, pin_hash, rol, activo)
-      VALUES (?, ?, ?, ?, ?, ?, ?, 1)
+      INSERT INTO usuarios (id, empresa_id, nombre, username, email, pin_hash, password_hash, rol, activo)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1)
     `);
-    insertUser.run('usr-dueno-01', DEFAULT_EMPRESA_ID, 'Roberto (Dueño)', 'dueno', 'roberto@almacencentral.com', hashPin('9999'), 'DUENO');
-    insertUser.run('usr-super-01', DEFAULT_EMPRESA_ID, 'Carla (Supervisora)', 'supervisor', 'carla@almacencentral.com', hashPin('5555'), 'SUPERVISOR');
-    insertUser.run('usr-caj-01', DEFAULT_EMPRESA_ID, 'Lucas (Cajero Mañana)', 'lucas', 'lucas@almacencentral.com', hashPin('1111'), 'CAJERO');
-    insertUser.run('usr-caj-02', DEFAULT_EMPRESA_ID, 'Martina (Cajera Tarde)', 'martina', 'martina@almacencentral.com', hashPin('2222'), 'CAJERO');
-    insertUser.run('usr-caj-03', DEFAULT_EMPRESA_ID, 'Diego (Cajero Refuerzo)', 'diego', 'diego@almacencentral.com', hashPin('3333'), 'CAJERO');
+    insertUser.run('usr-dueno-01', DEFAULT_EMPRESA_ID, 'Roberto (Dueño)', 'dueno', 'roberto@almacencentral.com', hashPin('9999'), hashPin('9999'), 'DUENO');
+    insertUser.run('usr-super-01', DEFAULT_EMPRESA_ID, 'Carla (Supervisora)', 'supervisor', 'carla@almacencentral.com', hashPin('5555'), hashPin('5555'), 'SUPERVISOR');
+    insertUser.run('usr-caj-01', DEFAULT_EMPRESA_ID, 'Lucas (Cajero Mañana)', 'lucas', 'lucas@almacencentral.com', hashPin('1111'), hashPin('1111'), 'CAJERO');
+    insertUser.run('usr-caj-02', DEFAULT_EMPRESA_ID, 'Martina (Cajera Tarde)', 'martina', 'martina@almacencentral.com', hashPin('2222'), hashPin('2222'), 'CAJERO');
+    insertUser.run('usr-caj-03', DEFAULT_EMPRESA_ID, 'Diego (Cajero Refuerzo)', 'diego', 'diego@almacencentral.com', hashPin('3333'), hashPin('3333'), 'CAJERO');
   }
 
   // 2 y 3. Semillas de Rubros y 5 Medios de Pago de la empresa por defecto

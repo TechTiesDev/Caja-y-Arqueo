@@ -1146,3 +1146,43 @@ label {
     font-size: 0.72rem;
   }
 }
+
+/* Campo de contraseña con botón integrado para Mostrar / Ocultar en Login */
+.password-field-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+  width: 100%;
+}
+
+.password-field-wrap .input-xl {
+  width: 100%;
+  padding-right: 92px;
+}
+
+.btn-pass-eye {
+  position: absolute;
+  right: 8px;
+  height: 36px;
+  padding: 0 10px;
+  border-radius: 8px;
+  border: 1px solid var(--btn-border);
+  border-bottom: 2px solid var(--btn-lip);
+  background: linear-gradient(180deg, var(--btn-top) 0%, var(--btn-bottom) 100%);
+  color: var(--text);
+  font-size: 0.84rem;
+  font-weight: 700;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  transition: transform var(--dur-fast) var(--ease-smooth), filter var(--dur-fast) var(--ease-smooth);
+}
+
+.btn-pass-eye:hover {
+  filter: brightness(1.03);
+}
+
+.btn-pass-eye:active {
+  transform: translateY(1px);
+}

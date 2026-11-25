@@ -28,8 +28,15 @@ function hashPin(pin) {
 
 function verifyPin(pin, hash) {
   if (!pin || !hash) return false;
-  const computed = hashPin(pin);
-  return crypto.timingSafeEqual(Buffer.from(computed, 'hex'), Buffer.from(hash, 'hex'));
+  const bufStored = Buffer.from(hash, 'hex');
+  for (const salt of ['caja-salt-v1', 'modular-core-salt-v1']) {
+    const computed = crypto.scryptSync(String(pin), salt, 32).toString('hex');
+    const bufComp = Buffer.from(computed, 'hex');
+    if (bufComp.length === bufStored.length && crypto.timingSafeEqual(bufComp, bufStored)) {
+      return true;
+    }
+  }
+  return false;
 }
 
 function signToken(payload, expiresInSeconds = 43200, type = 'access') {
