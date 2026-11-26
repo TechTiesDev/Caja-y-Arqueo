@@ -5,12 +5,12 @@
   "private": true,
   "type": "commonjs",
   "engines": {
-    "node": ">=22.12.0"
+    "node": ">=22.5.0"
   },
   "scripts": {
-    "start": "node backend/src/server.js",
-    "test": "node --test backend/tests/*.test.js",
-    "seed": "node backend/src/db/seed-cli.js",
+    "start": "node --experimental-sqlite backend/src/server.js",
+    "test": "node --experimental-sqlite --test backend/tests/*.test.js",
+    "seed": "node --experimental-sqlite backend/src/db/seed-cli.js",
     "build:apk": "node tools/build-apk.js",
     "android:apk": "node tools/build-apk.js",
     "android:aab": "npx cap sync android && cd android && ./gradlew bundleRelease"
