@@ -4,6 +4,9 @@
   "description": "Sistema de Conteo de Ventas (Sin Stock), Control de Turnos, Arqueo Ciego y Analítica en Tiempo Real",
   "private": true,
   "type": "commonjs",
+  "engines": {
+    "node": ">=22.12.0"
+  },
   "scripts": {
     "start": "node backend/src/server.js",
     "test": "node --test backend/tests/*.test.js",
